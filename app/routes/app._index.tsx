@@ -8,31 +8,19 @@ import { StatsGrid } from "../components/StatsGrid";
 import { ActionSection } from "../components/ActionSection";
 import { TaskBox } from "../components/TaskBox";
 import { RevenueChart } from "../components/RevenueChart";
-import { CreateMockProduct } from "../components/CreateMockProductModal"; // ✅ ADDED
+import { CreateMockProduct } from "../components/CreateMockProductModal";
 import {
   getLocationId,
   activateInventory,
   setInventoryQuantity,
 } from "../utils/inventory.server";
+import { GET_PRODUCTS, CREATE_PRODUCT } from "../graphql/product";
+import { ENABLE_TRACKING } from "../graphql/inventory";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
 
-  const productResponse = await admin.graphql(`
-    {
-      products(first: 250) {
-        edges {
-          node {
-            id
-            title
-            rating: metafield(namespace: "custom", key: "rating") { value }
-            featured: metafield(namespace: "custom", key: "featured") { value }
-            note: metafield(namespace: "custom", key: "note") { value }
-          }
-        }
-      }
-    }
-  `);
+  const productResponse = await admin.graphql(GET_PRODUCTS);
 
   const pData: any = await productResponse.json();
   const products = pData.data?.products?.edges || [];
@@ -91,42 +79,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
 
   const formData = await request.formData();
-  const intent = formData.get("intent");
+  const intent = formData.get("actionType");
   const name = formData.get("name") as string;
   const quantity = parseInt((formData.get("quantity") as string) || "0");
   const rating = formData.get("rating") as string;
   const description = formData.get("description") as string;
 
   try {
-    const response = await admin.graphql(
-      `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            variants(first: 1) {
-              edges {
-                node {
-                  id
-                  inventoryItem {
-                    id
-                  }
-                }
-              }
-            }
-          }
-          userErrors { message }
-        }
-      }`,
-      {
-        variables: {
-          product: {
-            title: name || "New Product",
-            descriptionHtml: description || "",
-          },
+    const response = await admin.graphql(CREATE_PRODUCT, {
+      variables: {
+        product: {
+          title: name || "New Product",
+          descriptionHtml: description || "",
         },
       },
-    );
+    });
 
     const json: any = await response.json();
     const product = json.data?.productCreate?.product;
@@ -139,15 +106,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const inventoryItemId = variant.inventoryItem.id;
 
     // ✅ NEW CLEAN INVENTORY FLOW
-    await admin.graphql(
-      `#graphql
-      mutation enableTracking($id: ID!) {
-        inventoryItemUpdate(id: $id, input: { tracked: true }) {
-          inventoryItem { id }
-        }
-      }`,
-      { variables: { id: inventoryItemId } },
-    );
+    await admin.graphql(ENABLE_TRACKING, {
+      variables: { id: inventoryItemId },
+    });
 
     const locationId = await getLocationId(admin);
 
@@ -220,7 +181,7 @@ export default function Index() {
           product={(fetcher.data as any)?.product}
           error={(fetcher.data as any)?.error}
           isLoading={isLoading}
-        />{" "}
+        />
         <TaskBox tasks={tasks} />
       </div>
 

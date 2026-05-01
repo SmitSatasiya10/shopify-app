@@ -10,10 +10,8 @@ export function BulkMetafieldTable({ products }: { products: any[] }) {
     ["loading", "submitting"].includes(createFetcher.state) &&
     createFetcher.formMethod === "POST";
 
-  const [loadingAi, setLoadingAi] = useState<string | null>(null);
   const [editingIds, setEditingIds] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [isBulkOptimizing, setIsBulkOptimizing] = useState(false);
   const [search, setSearch] = useState("");
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [collectionName, setCollectionName] = useState("");
@@ -143,57 +141,12 @@ export function BulkMetafieldTable({ products }: { products: any[] }) {
     setCollectionName("");
   };
 
-  const getAiSuggestion = async (productId: string, productName: string) => {
-    setLoadingAi(productId);
-
-    const suggestion = await fetchSuggestion(productName);
-
-    setNotes((prev) => ({
-      ...prev,
-      [productId]: suggestion,
-    }));
-
-    setLoadingAi(null);
-  };
-
-  // -------------------------
-  // BULK AI
-  // -------------------------
-  const flashOptimize = async () => {
-    if (isBulkOptimizing) return;
-    setIsBulkOptimizing(true);
-
-    for (const product of products) {
-      const productId = product.id;
-
-      if (!notes[productId]) {
-        setLoadingAi(productId);
-
-        const suggestion = await fetchSuggestion(product.title);
-
-        setNotes((prev) => ({
-          ...prev,
-          [productId]: suggestion,
-        }));
-
-        await new Promise((r) => setTimeout(r, 200));
-      }
-    }
-
-    setLoadingAi(null);
-    setIsBulkOptimizing(false);
-  };
-
   // Filter
   const filteredProducts = useMemo(() => {
     return products.filter((p) =>
       p.title.toLowerCase().includes(search.toLowerCase()),
     );
   }, [products, search]);
-
-  const collectionHandler = () => {
-    console.log("collection");
-  };
 
   // -------------------------
   // UI

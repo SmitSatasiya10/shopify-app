@@ -20,12 +20,10 @@ export const METAFIELD_DEFINITIONS = [
     type: "boolean",
     ownerType: "PRODUCT",
   },
-  
 ];
 
 /* Ensures that the required metafield definitions exist in the shop and are PINNED.
  */
-
 export async function ensureMetafieldDefinitions(admin: any) {
   console.log("Checking/Creating/Pinning Metafield Definitions...");
 
@@ -38,42 +36,67 @@ export async function ensureMetafieldDefinitions(admin: any) {
             userErrors { field message code }
           }
         }`,
-        { variables: { definition } }
+        { variables: { definition } },
       );
 
-      const createResult: any = await createResponse.json();
-      const createErrors = createResult.data?.metafieldDefinitionCreate?.userErrors;
-      let definitionId = createResult.data?.metafieldDefinitionCreate?.createdDefinition?.id;
+      const createResult = await createResponse.json();
 
-      if (createErrors && createErrors.length > 0) {
-        if (createErrors.some((e: any) => e.code === "TAKEN")) {
-          console.log(`Metafield definition for ${definition.key} already exists. Fetching ID...`);
+      // ✅ IMPORTANT: check BOTH levels
+      const topErrors = createResult.errors;
+      const userErrors =
+        createResult.data?.metafieldDefinitionCreate?.userErrors;
+
+      let definitionId =
+        createResult.data?.metafieldDefinitionCreate?.createdDefinition?.id;
+
+      if (topErrors?.length) {
+        console.error("GraphQL Error:", topErrors);
+        continue;
+      }
+
+      // If already exists → fetch it
+      if (userErrors?.length) {
+        const isTaken = userErrors.some(
+          (e: any) => e.code === "TAKEN" || e.message?.includes("already"),
+        );
+
+        if (isTaken) {
           const findResponse: any = await admin.graphql(
-            `query findDefinition($namespace: String!, $key: String!) {
-              metafieldDefinitions(first: 1, ownerType: PRODUCT, namespace: $namespace, key: $key) {
+            `query {
+              metafieldDefinitions(
+                first: 1,
+                ownerType: PRODUCT,
+                namespace: "${definition.namespace}",
+                key: "${definition.key}"
+              ) {
                 edges { node { id } }
               }
             }`,
-            { variables: { namespace: definition.namespace, key: definition.key } }
           );
+
           const findResult = await findResponse.json();
-          definitionId = findResult.data?.metafieldDefinitions?.edges[0]?.node?.id;
+          definitionId =
+            findResult.data?.metafieldDefinitions?.edges?.[0]?.node?.id;
         }
       }
 
+      // ✅ PIN definition
       if (definitionId) {
-        console.log(`Pinning metafield definition ${definition.key} (${definitionId})...`);
         await admin.graphql(
-          `mutation metafieldDefinitionPin($definitionId: ID!) {
-            metafieldDefinitionPin(definitionId: $definitionId) {
+          `mutation {
+            metafieldDefinitionPin(definitionId: "${definitionId}") {
               userErrors { message }
             }
           }`,
-          { variables: { definitionId } }
         );
+
+        console.log(`Pinned: ${definition.key}`);
       }
+
+      // 🔥 IMPORTANT: small delay to avoid Shopify propagation issue
+      await new Promise((r) => setTimeout(r, 200));
     } catch (error) {
-      console.error(`Exception ensuring metafield definition ${definition.key}:`, error);
+      console.error(`Error for ${definition.key}:`, error);
     }
   }
 }
@@ -81,35 +104,48 @@ export async function ensureMetafieldDefinitions(admin: any) {
 /**
  * Syncs product tags based on metafield values.
  */
-export async function syncProductTags(admin: any, productId: string, rating: number | string, featured: boolean | string) {
+export async function syncProductTags(
+  admin: any,
+  productId: string,
+  rating: number | string,
+  featured: boolean | string,
+) {
   const isTopRated = Number(rating) >= 4;
   const isFeatured = String(featured) === "true";
 
   try {
-    const queryResponse = await admin.graphql(`
+    const queryResponse = await admin.graphql(
+      `
       query getTags($id: ID!) {
         product(id: $id) { tags }
       }
-    `, { variables: { id: productId } });
+    `,
+      { variables: { id: productId } },
+    );
 
     const queryData = await queryResponse.json();
     let tags = queryData.data?.product?.tags || [];
 
     // Logistic for Top-Rated
     if (isTopRated && !tags.includes("Top-Rated")) tags.push("Top-Rated");
-    if (!isTopRated && tags.includes("Top-Rated")) tags = tags.filter((t: string) => t !== "Top-Rated");
+    if (!isTopRated && tags.includes("Top-Rated"))
+      tags = tags.filter((t: string) => t !== "Top-Rated");
 
     // Logistic for Featured
     if (isFeatured && !tags.includes("Featured")) tags.push("Featured");
-    if (!isFeatured && tags.includes("Featured")) tags = tags.filter((t: string) => t !== "Featured");
+    if (!isFeatured && tags.includes("Featured"))
+      tags = tags.filter((t: string) => t !== "Featured");
 
-    await admin.graphql(`
+    await admin.graphql(
+      `
       mutation updateTags($id: ID!, $tags: [String!]) {
         productUpdate(input: { id: $id, tags: $tags }) {
           product { id tags }
         }
       }
-    `, { variables: { id: productId, tags } });
+    `,
+      { variables: { id: productId, tags } },
+    );
 
     console.log(`🏷 Tags synced for product ${productId}: ${tags.join(", ")}`);
   } catch (error) {
@@ -120,13 +156,18 @@ export async function syncProductTags(admin: any, productId: string, rating: num
 /**
  * Sets default metafields for a product.
  */
-export async function setProductDefaultMetafields(admin: any, productId: string) {
+export async function setProductDefaultMetafields(
+  admin: any,
+  productId: string,
+) {
   const rating = Math.floor(Math.random() * 5) + 1;
   const featured = Math.random() > 0.5;
   const note = "-";
 
   console.log(`Setting default metafields for product ${productId}`);
-  const formattedId = productId.startsWith("gid://") ? productId : `gid://shopify/Product/${productId}`;
+  const formattedId = productId.startsWith("gid://")
+    ? productId
+    : `gid://shopify/Product/${productId}`;
 
   try {
     const response = await admin.graphql(
@@ -138,17 +179,38 @@ export async function setProductDefaultMetafields(admin: any, productId: string)
       {
         variables: {
           metafields: [
-            { ownerId: formattedId, namespace: "custom", key: "note", type: "single_line_text_field", value: note },
-            { ownerId: formattedId, namespace: "custom", key: "rating", type: "number_integer", value: String(rating) },
-            { ownerId: formattedId, namespace: "custom", key: "featured", type: "boolean", value: String(featured) },
+            {
+              ownerId: formattedId,
+              namespace: "custom",
+              key: "note",
+              type: "single_line_text_field",
+              value: note,
+            },
+            {
+              ownerId: formattedId,
+              namespace: "custom",
+              key: "rating",
+              type: "number_integer",
+              value: String(rating),
+            },
+            {
+              ownerId: formattedId,
+              namespace: "custom",
+              key: "featured",
+              type: "boolean",
+              value: String(featured),
+            },
           ],
         },
-      }
+      },
     );
 
     const result = await response.json();
     if (result.data?.metafieldsSet?.userErrors?.length > 0) {
-      console.error(`Store Error for ${productId}:`, result.data.metafieldsSet.userErrors);
+      console.error(
+        `Store Error for ${productId}:`,
+        result.data.metafieldsSet.userErrors,
+      );
     } else {
       await syncProductTags(admin, formattedId, rating, featured);
       console.log(`Success for ${productId}`);
@@ -175,7 +237,7 @@ export async function initializeAllProducts(admin: any) {
             edges { node { id } }
           }
         }`,
-        { variables: { cursor } }
+        { variables: { cursor } },
       );
       const data: any = await response.json();
       const products = data.data?.products?.edges || [];
@@ -197,7 +259,7 @@ export async function initializeAllProducts(admin: any) {
 export async function setProductMetafields(
   admin: any,
   productId: string,
-  values: { note: string; rating: string; featured: string }
+  values: { note: string; rating: string; featured: string },
 ) {
   try {
     const response: any = await admin.graphql(
@@ -210,12 +272,30 @@ export async function setProductMetafields(
       {
         variables: {
           metafields: [
-            { ownerId: productId, namespace: "custom", key: "note", type: "single_line_text_field", value: values.note },
-            { ownerId: productId, namespace: "custom", key: "rating", type: "number_integer", value: values.rating },
-            { ownerId: productId, namespace: "custom", key: "featured", type: "boolean", value: values.featured },
+            {
+              ownerId: productId,
+              namespace: "custom",
+              key: "note",
+              type: "single_line_text_field",
+              value: values.note,
+            },
+            {
+              ownerId: productId,
+              namespace: "custom",
+              key: "rating",
+              type: "number_integer",
+              value: values.rating,
+            },
+            {
+              ownerId: productId,
+              namespace: "custom",
+              key: "featured",
+              type: "boolean",
+              value: values.featured,
+            },
           ],
         },
-      }
+      },
     );
 
     await syncProductTags(admin, productId, values.rating, values.featured);
