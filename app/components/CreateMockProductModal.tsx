@@ -19,7 +19,6 @@ export function CreateMockProduct({ fetcher }: { fetcher: any }) {
     formData.append("quantity", productData.quantity);
     formData.append("rating", productData.rating);
     formData.append("description", productData.description);
-
     fetcher.submit(formData, {
       method: "post",
       action: "/app?index", 
@@ -35,7 +34,7 @@ export function CreateMockProduct({ fetcher }: { fetcher: any }) {
         commandFor="product-modal"
         {...(isLoading ? { loading: true } : {})}
       >
-        Generate Mock Product
+        Generate Mock Product 
       </s-button>
 
       {/* MODAL */}
