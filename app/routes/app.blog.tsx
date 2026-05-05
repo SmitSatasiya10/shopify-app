@@ -61,20 +61,56 @@ export const action = async ({ request }: any) => {
 
   // 👉 Create Article
   if (type === "article") {
+    const id = formData.get("id");
     const blogId = formData.get("blogId");
     const title = formData.get("title");
     const content = formData.get("content");
 
     const file = formData.get("file") as File | null;
-
-    console.log("SERVER FILE:", file);
-    console.log("FILE SIZE:", file?.size);
-
     let uploadedImageUrl = null;
 
     // NOW file is available
     if (file instanceof File && file.size > 0) {
       uploadedImageUrl = await uploadImageToShopify(admin, file);
+    }
+
+    if (id) {
+      const response = await admin.graphql(
+        `
+    mutation articleUpdate($id: ID!, $article: ArticleUpdateInput!) {
+      articleUpdate(id: $id, article: $article) {
+        article {
+          id
+          title
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+    `,
+        {
+          variables: {
+            id,
+            article: {
+              title,
+              body: content,
+              // optional but better
+              ...(uploadedImageUrl && {
+                image: {
+                  url: uploadedImageUrl,
+                  altText: title,
+                },
+              }),
+            },
+          },
+        },
+      );
+
+      return new Response(JSON.stringify(await response.json()), {
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // STEP 3: create article
@@ -96,11 +132,6 @@ export const action = async ({ request }: any) => {
         },
       },
     });
-    console.log("sSDDFEF:", {
-      blogId,
-      title,
-      uploadedImageUrl,
-    });
 
     return new Response(JSON.stringify(await response.json()), {
       headers: { "Content-Type": "application/json" },
@@ -111,7 +142,10 @@ export const action = async ({ request }: any) => {
   if (type === "getArticles") {
     const blogIdRaw = formData.get("blogId");
 
-    const blogId = typeof blogIdRaw === "string" ? blogIdRaw.trim() : "";
+    const blogId =
+      typeof blogIdRaw === "string" && blogIdRaw.trim().length > 0
+        ? blogIdRaw.trim()
+        : null;
 
     if (blogId) {
       const response = await admin.graphql(BLOG_ARTICLES_QUERY, {
@@ -154,6 +188,27 @@ export const action = async ({ request }: any) => {
     );
   }
 
+  // 👉 DELETE ARTICLE
+  if (type === "deleteArticle") {
+    const id = formData.get("id");
+
+    const response = await admin.graphql(`
+    mutation {
+      articleDelete(id: "${id}") {
+        deletedArticleId
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `);
+
+    return new Response(JSON.stringify(await response.json()), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   return new Response(JSON.stringify({ error: "Invalid action" }), {
     status: 400,
   });
@@ -178,7 +233,9 @@ export default function BlogPage() {
   const [blogTitle, setBlogTitle] = useState("");
   const [articleTitle, setArticleTitle] = useState("");
   const [content, setContent] = useState("");
-  const [selectedBlog, setSelectedBlog] = useState("");
+  const [selectedBlog, setSelectedBlog] = useState(
+    loaderData.blogs?.[0]?.id || "",
+  );
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
@@ -228,14 +285,12 @@ export default function BlogPage() {
   }, [file]);
 
   useEffect(() => {
-    if (!selectedBlog) {
-      setArticles([]);
-      return;
-    }
-
     const fd = new FormData();
     fd.append("type", "getArticles");
-    fd.append("blogId", selectedBlog);
+
+    if (selectedBlog) {
+      fd.append("blogId", selectedBlog);
+    }
 
     setArticles([]);
     articlesFetcher.submit(fd, { method: "post" });
@@ -256,11 +311,46 @@ export default function BlogPage() {
     articlesFetcher.submit(fd, { method: "post" });
   }, []);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [originalData, setOriginalData] = useState<any>(null);
+
+  const handleDeleteArticle = async (id: string) => {
+    const fd = new FormData();
+    fd.append("type", "deleteArticle");
+    fd.append("id", id);
+
+    await articleFetcher.submit(fd, { method: "post" });
+
+    // refresh list
+    const refreshFd = new FormData();
+    refreshFd.append("type", "getArticles");
+
+    if (selectedBlog) {
+      refreshFd.append("blogId", selectedBlog);
+    }
+
+    articlesFetcher.submit(refreshFd, { method: "post" });
+  };
+
+  const handleEditArticle = (article: any) => {
+    setArticleTitle(article.title);
+    setContent(article.bodyHtml || "");
+    setSelectedBlog(article.blogId);
+
+    setEditingId(article.id);
+
+    setOriginalData({
+      blogId: article.blogId,
+      title: article.title,
+      content: article.bodyHtml || "",
+    });
+  };
+
   return (
     <s-page heading="Blog Management">
+      {/* BLOG SECTION */}
       <s-section>
         <s-stack direction="block" gap="large">
-          {/* CREATE BLOG - List Blog*/}
           <BlogManager
             blogs={blogs}
             blogTitle={blogTitle}
@@ -268,8 +358,14 @@ export default function BlogPage() {
             blogFetcher={blogFetcher}
             loading={blogLoading}
           />
+        </s-stack>
+      </s-section>
 
-          {/* CREATE ARTICLE */}
+      <s-stack direction="block" gap="large-500" />
+
+      {/* ARTICLE SECTION */}
+      <s-section>
+        <s-stack direction="block" gap="large">
           <CreateArticleForm
             blogs={blogs}
             selectedBlog={selectedBlog}
@@ -283,16 +379,20 @@ export default function BlogPage() {
             preview={preview}
             loading={articleLoading}
             articleFetcher={articleFetcher}
+            editingId={editingId}
+            originalData={originalData}
+          />
+
+          <ArticleSection
+            selectedBlog={selectedBlog}
+            setSelectedBlog={setSelectedBlog}
+            blogs={blogs}
+            articles={articles}
+            articlesLoading={articlesLoading}
+            onEdit={handleEditArticle}
+            onDelete={handleDeleteArticle}
           />
         </s-stack>
-
-        <ArticleSection
-          selectedBlog={selectedBlog}
-          setSelectedBlog={setSelectedBlog}
-          blogs={blogs}
-          articles={articles}
-          articlesLoading={articlesLoading}
-        />
       </s-section>
     </s-page>
   );

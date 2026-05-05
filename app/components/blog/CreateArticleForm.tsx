@@ -1,4 +1,4 @@
-  type CreateArticleFormProps = {
+type CreateArticleFormProps = {
   blogs: { id: string; title: string }[];
   selectedBlog: string;
   setSelectedBlog: (value: string) => void;
@@ -11,7 +11,10 @@
   preview: string | null;
   loading: boolean;
   articleFetcher: any;
-};  
+  editingId: string | null;
+
+  originalData: any;
+};
 
 export default function CreateArticleForm({
   blogs,
@@ -26,7 +29,15 @@ export default function CreateArticleForm({
   preview,
   loading,
   articleFetcher,
+  editingId,
+  originalData,
 }: CreateArticleFormProps) {
+  const isChanged =
+    editingId &&
+    originalData &&
+    (selectedBlog !== originalData.blogId ||
+      articleTitle !== originalData.title ||
+      content !== originalData.content);
   return (
     <s-stack paddingBlockEnd="large-500">
       <s-stack direction="block" gap="base">
@@ -40,7 +51,9 @@ export default function CreateArticleForm({
             setSelectedBlog(e.target.value || e.detail?.value)
           }
         >
-          <s-option value="" disabled>Select Blog</s-option>
+          <s-option value="" disabled>
+            Select Blog
+          </s-option>
           {blogs.map((b: any) => (
             <s-option key={b.id} value={b.id}>
               {b.title}
@@ -92,10 +105,12 @@ export default function CreateArticleForm({
             loading ||
             !selectedBlog ||
             !articleTitle.trim() ||
-            !content.trim()
+            !content.trim() ||
+            (editingId ? !isChanged : false)
           }
           onClick={() => {
             const fd = new FormData();
+            fd.append("id", editingId || "");
             fd.append("type", "article");
             fd.append("blogId", selectedBlog);
             fd.append("title", articleTitle);
@@ -110,7 +125,7 @@ export default function CreateArticleForm({
             });
           }}
         >
-          Create Article
+          {editingId ? "Update Article" : "Create Article"}
         </s-button>
       </s-stack>
     </s-stack>
