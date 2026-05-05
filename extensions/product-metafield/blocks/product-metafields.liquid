@@ -1,0 +1,76 @@
+{% assign selected_product = product %}
+
+<div style="padding: 12px; border: 1px solid #eee;">
+  <h2>{{ selected_product.title }}</h2>
+
+  {% if selected_product.metafields.custom.rating %}
+    <p>Rating: {{ selected_product.metafields.custom.rating }}</p>
+  {% endif %}
+
+  {% assign featured = selected_product.metafields.custom.featured.value %}
+
+  {% if featured != null %} 
+    <p>
+      Featured:
+      {% if featured %}Yes{% else %}No{% endif %}
+    </p>
+  {% endif %}
+
+  {% if selected_product.metafields.custom.note != blank %}
+    <p>Note: {{ selected_product.metafields.custom.note }}</p>
+  {% endif %}
+</div>
+
+{% schema %}
+{
+  "name": "Product Metafields",
+  "target": "section",
+  "templates": ["product"],
+  "settings": []
+}
+{% endschema %}
+
+{% comment %}
+  {% assign selected_product = product | default: block.settings.product %}
+
+  <div style="padding: 12px; border: 1px solid #eee;">
+    <p>Product handle: {{ product.handle }}</p>
+    <p>Selected product: {{ block.settings.product.title }}</p>
+
+    {% if selected_product %}
+      <h2>{{ selected_product.title }}</h2>
+    {% endif %}
+
+    {% if selected_product.metafields.custom.rating %}
+      <p>Rating: {{ selected_product.metafields.custom.rating }}</p>
+    {% endif %}
+
+    {% assign featured = selected_product.metafields.custom.featured.value %}
+
+    {% if featured != null %}
+      <p>
+        Featured:
+        {% if featured %}Yes{% else %}No{% endif %}
+      </p>
+    {% endif %}
+
+    {% if selected_product.metafields.custom.note != blank %}
+      <p>Note: {{ selected_product.metafields.custom.note }}</p>
+    {% endif %}
+  </div>
+
+  {% schema %}
+  {
+    "name": "Product Metafields",
+    "target": "section",
+    "templates": ["product"],
+    "settings": [
+      {
+        "type": "product",
+        "id": "product",
+        "label": "Product"
+      }
+    ]
+  }
+  {% endschema %}
+{% endcomment %}
