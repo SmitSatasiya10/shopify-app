@@ -1,25 +1,157 @@
 {% assign selected_product = product %}
 
-<div style="padding: 12px; border: 1px solid #eee;">
-  <h2>{{ selected_product.title }}</h2>
+<div class="product-meta-card">
+  {% comment %} <div class="meta-header">
+    <h2>{{ selected_product.title }}</h2>
+  </div> {% endcomment %}
 
-  {% if selected_product.metafields.custom.rating %}
-    <p>Rating: {{ selected_product.metafields.custom.rating }}</p>
-  {% endif %}
+  <div class="meta-grid">
+    {% if selected_product.metafields.custom.rating %}
+      <div class="meta-item">
+        <div class="meta-left">
+          <span class="icon">⭐</span>
+          <span class="label">Rating</span>
+        </div>
 
-  {% assign featured = selected_product.metafields.custom.featured.value %}
+        <span class="value"> {{ selected_product.metafields.custom.rating }}/5 </span>
+      </div>
+    {% endif %}
 
-  {% if featured != null %} 
-    <p>
-      Featured:
-      {% if featured %}Yes{% else %}No{% endif %}
-    </p>
-  {% endif %}
+    {% assign featured = selected_product.metafields.custom.featured.value %}
+
+    {% if featured != null %}
+      <div class="meta-item">
+        <div class="meta-left">
+          <span class="icon">🔥</span>
+          <span class="label">Featured</span>
+        </div>
+
+        <span class="badge {% if featured %}active{% else %}inactive{% endif %}">
+          {% if featured %}
+            Yes
+          {% else %}
+            No
+          {% endif %}
+        </span>
+      </div>
+    {% endif %}
+  </div>
 
   {% if selected_product.metafields.custom.note != blank %}
-    <p>Note: {{ selected_product.metafields.custom.note }}</p>
+    <div class="note-section">
+      <p class="note-heading">📝 Product Note</p>
+
+      <p class="note-content">
+        {{ selected_product.metafields.custom.note }}
+      </p>
+    </div>
   {% endif %}
 </div>
+
+<style>
+  .product-meta-card {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 18px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+    margin-top: 14px;
+    max-width: 100%;
+  }
+
+  .meta-header h2 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 20px;
+  }
+
+  .meta-grid {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .meta-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f9fafb;
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+
+  .meta-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .icon {
+    font-size: 18px;
+  }
+
+  .label {
+    font-size: 16px;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  .value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #111827;
+  }
+
+  .badge {
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .badge.active {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .badge.inactive {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .note-section {
+    background: #f9fafb;
+    border-radius: 14px;
+  }
+
+  .note-heading {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #111827;
+    padding: 0 16px;
+  }
+
+  .note-content {
+    font-size: 15px;
+    color: #4b5563;
+    margin: 0;
+  }
+
+  .product-meta-card {
+    width: 100%;
+    max-width: 320px;
+    margin-top: 16px;
+  }
+
+  .note-section {
+    min-height: auto;
+  }
+
+  .note-content {
+    margin-top: 6px;
+  }
+</style>
 
 {% schema %}
 {
