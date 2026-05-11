@@ -147,7 +147,6 @@ export async function syncProductTags(
       { variables: { id: productId, tags } },
     );
 
-    console.log(`🏷 Tags synced for product ${productId}: ${tags.join(", ")}`);
   } catch (error) {
     console.error(" Error syncing product tags:", error);
   }
@@ -164,7 +163,6 @@ export async function setProductDefaultMetafields(
   const featured = Math.random() > 0.5;
   const note = "-";
 
-  console.log(`Setting default metafields for product ${productId}`);
   const formattedId = productId.startsWith("gid://")
     ? productId
     : `gid://shopify/Product/${productId}`;
